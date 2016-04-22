@@ -65,13 +65,14 @@ Starts a request to get all desktop sources, `callback` will be called with
 
 The `sources` is an array of `Source` objects, each `Source` represents a
 captured screen or individual window, and has following properties:
+
 * `id` String - The id of the captured window or screen used in
   `navigator.webkitGetUserMedia`. The format looks like `window:XX` or
   `screen:XX` where `XX` is a random generated number.
 * `name` String - The described name of the capturing screen or window. If the
   source is a screen, the name will be `Entire Screen` or `Screen <index>`; if
   it is a window, the name will be the window's title.
-* `thumbnail` [NativeImage](NativeImage.md) - A thumbnail image.
+* `thumbnail` A thumbnail [native image](native-image.md).
 
 **Note:** There is no guarantee that the size of `source.thumbnail` is always
 the same as the `thumnbailSize` in `options`. It also depends on the scale of

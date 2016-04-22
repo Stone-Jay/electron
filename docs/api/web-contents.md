@@ -353,6 +353,10 @@ Returns the title of the current web page.
 
 Returns whether web page is still loading resources.
 
+### `webContents.isLoadingMainFrame()`
+
+Returns whether the main frame (and not just iframes or frames within it) is still loading.
+
 ### `webContents.isWaitingForResponse()`
 
 Returns whether the web page is waiting for a first-response from the main
@@ -647,7 +651,8 @@ Removes the specified path from DevTools workspace.
 ### `webContents.openDevTools([options])`
 
 * `options` Object (optional)
-  * `detach` Boolean - opens DevTools in a new window
+  * `mode` String - Opens the devtools with specified dock state, can be one of
+    "right", "bottom", "undocked", "detach". Defaults to last used dock state.
 
 Opens the devtools.
 
