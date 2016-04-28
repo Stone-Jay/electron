@@ -1,8 +1,6 @@
 # dialog
 
-The `dialog` module provides APIs to show native system dialogs, such as opening
-files or alerting, so web applications can deliver the same user experience as
-native applications.
+> Display native system dialogs for opening and saving files, alerting, etc.
 
 An example of showing a dialog to select multiple files and directories:
 
@@ -12,7 +10,8 @@ const dialog = require('electron').dialog;
 console.log(dialog.showOpenDialog({ properties: [ 'openFile', 'openDirectory', 'multiSelections' ]}));
 ```
 
-The Dialog is opened from Electron's main thread. If you want to use the dialog object from a renderer process, remember to access it using the remote:
+The Dialog is opened from Electron's main thread. If you want to use the dialog
+object from a renderer process, remember to access it using the remote:
 
 ```javascript
 const dialog = require('electron').remote.dialog;

@@ -41,7 +41,6 @@
 
 #if defined(OS_WIN)
 #include "base/strings/utf_string_conversions.h"
-#include "ui/base/win/shell.h"
 #endif
 
 using atom::Browser;
@@ -194,10 +193,11 @@ int ImportIntoCertStore(
 
 }  // namespace
 
-App::App() {
+App::App(v8::Isolate* isolate) {
   static_cast<AtomBrowserClient*>(AtomBrowserClient::Get())->set_delegate(this);
   Browser::Get()->AddObserver(this);
   content::GpuDataManager::GetInstance()->AddObserver(this);
+  Init(isolate);
 }
 
 App::~App() {
@@ -331,12 +331,6 @@ void App::OnGpuProcessCrashed(base::TerminationStatus exit_code) {
   Emit("gpu-process-crashed");
 }
 
-#if defined(OS_MACOSX)
-void App::OnPlatformThemeChanged() {
-  Emit("platform-theme-changed");
-}
-#endif
-
 base::FilePath App::GetPath(mate::Arguments* args, const std::string& name) {
   bool succeed = false;
   base::FilePath path;
@@ -380,12 +374,6 @@ void App::AllowNTLMCredentialsForAllDomains(bool should_allow) {
 std::string App::GetLocale() {
   return l10n_util::GetApplicationLocale("");
 }
-
-#if defined(OS_WIN)
-bool App::IsAeroGlassEnabled() {
-  return ui::win::IsAeroGlassEnabled();
-}
-#endif
 
 bool App::MakeSingleInstance(
     const ProcessSingleton::NotificationCallback& callback) {
@@ -439,10 +427,16 @@ void App::OnCertificateManagerModelCreated(
 }
 #endif
 
-mate::ObjectTemplateBuilder App::GetObjectTemplateBuilder(
-    v8::Isolate* isolate) {
+// static
+mate::Handle<App> App::Create(v8::Isolate* isolate) {
+  return mate::CreateHandle(isolate, new App(isolate));
+}
+
+// static
+void App::BuildPrototype(
+    v8::Isolate* isolate, v8::Local<v8::ObjectTemplate> prototype) {
   auto browser = base::Unretained(Browser::Get());
-  return mate::ObjectTemplateBuilder(isolate)
+  mate::ObjectTemplateBuilder(isolate, prototype)
       .SetMethod("quit", base::Bind(&Browser::Quit, browser))
       .SetMethod("exit", base::Bind(&Browser::Exit, browser))
       .SetMethod("focus", base::Bind(&Browser::Focus, browser))
@@ -464,13 +458,10 @@ mate::ObjectTemplateBuilder App::GetObjectTemplateBuilder(
 #if defined(OS_MACOSX)
       .SetMethod("hide", base::Bind(&Browser::Hide, browser))
       .SetMethod("show", base::Bind(&Browser::Show, browser))
-      .SetMethod("isDarkMode",
-                 base::Bind(&Browser::IsDarkMode, browser))
 #endif
 #if defined(OS_WIN)
       .SetMethod("setUserTasks",
                  base::Bind(&Browser::SetUserTasks, browser))
-      .SetMethod("isAeroGlassEnabled", &App::IsAeroGlassEnabled)
 #endif
       .SetMethod("setPath", &App::SetPath)
       .SetMethod("getPath", &App::GetPath)
@@ -482,11 +473,6 @@ mate::ObjectTemplateBuilder App::GetObjectTemplateBuilder(
       .SetMethod("importCertificate", &App::ImportCertificate)
 #endif
       .SetMethod("makeSingleInstance", &App::MakeSingleInstance);
-}
-
-// static
-mate::Handle<App> App::Create(v8::Isolate* isolate) {
-  return CreateHandle(isolate, new App);
 }
 
 }  // namespace api
