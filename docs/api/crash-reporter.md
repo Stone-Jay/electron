@@ -6,21 +6,21 @@ The following is an example of automatically submitting a crash report to a
 remote server:
 
 ```javascript
-const crashReporter = require('electron').crashReporter;
+const {crashReporter} = require('electron')
 
 crashReporter.start({
   productName: 'YourName',
   companyName: 'YourCompany',
   submitURL: 'https://your-domain.com/url-to-submit',
   autoSubmit: true
-});
+})
 ```
 
 For setting up a server to accept and process crash reports, you can use
 following projects:
 
 * [socorro](https://github.com/mozilla/socorro)
-* [mini-breakpad-server](https://github.com/atom/mini-breakpad-server)
+* [mini-breakpad-server](https://github.com/electron/mini-breakpad-server)
 
 ## Methods
 
@@ -31,7 +31,7 @@ The `crash-reporter` module has the following methods:
 * `options` Object
   * `companyName` String
   * `submitURL` String - URL that crash reports will be sent to as POST.
-  * `productName` String (optional) - Default is `Electron`.
+  * `productName` String (optional) - Defaults to `app.getName()`.
   * `autoSubmit` Boolean - Send the crash report without user interaction.
     Default is `true`.
   * `ignoreSystemCrashHandler` Boolean - Default is `false`.
@@ -42,7 +42,7 @@ The `crash-reporter` module has the following methods:
 You are required to call this method before using other `crashReporter`
 APIs.
 
-**Note:** On OS X, Electron uses a new `crashpad` client, which is different
+**Note:** On macOS, Electron uses a new `crashpad` client, which is different
 from `breakpad` on Windows and Linux. To enable the crash collection feature,
 you are required to call the `crashReporter.start` API to initialize `crashpad`
 in the main process and in each renderer process from which you wish to collect

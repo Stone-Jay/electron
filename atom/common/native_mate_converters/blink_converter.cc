@@ -4,6 +4,7 @@
 
 #include "atom/common/native_mate_converters/blink_converter.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -12,9 +13,11 @@
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/browser/native_web_keyboard_event.h"
 #include "native_mate/dictionary.h"
+#include "third_party/WebKit/public/web/WebCache.h"
 #include "third_party/WebKit/public/web/WebDeviceEmulationParams.h"
 #include "third_party/WebKit/public/web/WebFindOptions.h"
 #include "third_party/WebKit/public/web/WebInputEvent.h"
+#include "ui/base/clipboard/clipboard.h"
 
 namespace {
 
@@ -90,6 +93,8 @@ struct Converter<blink::WebMouseEvent::Button> {
       *out = blink::WebMouseEvent::Button::ButtonMiddle;
     else if (button == "right")
       *out = blink::WebMouseEvent::Button::ButtonRight;
+    else
+      return false;
     return true;
   }
 };
@@ -171,10 +176,18 @@ bool Converter<blink::WebKeyboardEvent>::FromV8(
     out->modifiers |= blink::WebInputEvent::ShiftKey;
   out->setKeyIdentifierFromWindowsKeyCode();
   if ((out->type == blink::WebInputEvent::Char ||
-       out->type == blink::WebInputEvent::RawKeyDown) &&
-      str.size() == 1) {
-    out->text[0] = str[0];
-    out->unmodifiedText[0] = str[0];
+       out->type == blink::WebInputEvent::RawKeyDown)) {
+    // Make sure to not read beyond the buffer in case some bad code doesn't
+    // NULL-terminate it (this is called from plugins).
+    size_t text_length_cap = blink::WebKeyboardEvent::textLengthCap;
+    base::string16 text16 = base::UTF8ToUTF16(str);
+
+    memset(out->text, 0, text_length_cap);
+    memset(out->unmodifiedText, 0, text_length_cap);
+    for (size_t i = 0; i < std::min(text_length_cap, text16.size()); ++i) {
+      out->text[i] = text16[i];
+      out->unmodifiedText[i] = text16[i];
+    }
   }
   return true;
 }
@@ -200,7 +213,8 @@ bool Converter<blink::WebMouseEvent>::FromV8(
     return false;
   if (!dict.Get("x", &out->x) || !dict.Get("y", &out->y))
     return false;
-  dict.Get("button", &out->button);
+  if (!dict.Get("button", &out->button))
+    out->button = blink::WebMouseEvent::Button::ButtonLeft;
   dict.Get("globalX", &out->globalX);
   dict.Get("globalY", &out->globalY);
   dict.Get("movementX", &out->movementX);
@@ -294,6 +308,119 @@ bool Converter<blink::WebFindOptions>::FromV8(
   dict.Get("wordStart", &out->wordStart);
   dict.Get("medialCapitalAsWordStart", &out->medialCapitalAsWordStart);
   return true;
+}
+
+// static
+v8::Local<v8::Value> Converter<blink::WebContextMenuData::MediaType>::ToV8(
+      v8::Isolate* isolate, const blink::WebContextMenuData::MediaType& in) {
+  switch (in) {
+    case blink::WebContextMenuData::MediaTypeImage:
+      return mate::StringToV8(isolate, "image");
+    case blink::WebContextMenuData::MediaTypeVideo:
+      return mate::StringToV8(isolate, "video");
+    case blink::WebContextMenuData::MediaTypeAudio:
+      return mate::StringToV8(isolate, "audio");
+    case blink::WebContextMenuData::MediaTypeCanvas:
+      return mate::StringToV8(isolate, "canvas");
+    case blink::WebContextMenuData::MediaTypeFile:
+      return mate::StringToV8(isolate, "file");
+    case blink::WebContextMenuData::MediaTypePlugin:
+      return mate::StringToV8(isolate, "plugin");
+    default:
+      return mate::StringToV8(isolate, "none");
+  }
+}
+
+// static
+v8::Local<v8::Value> Converter<blink::WebContextMenuData::InputFieldType>::ToV8(
+      v8::Isolate* isolate,
+      const blink::WebContextMenuData::InputFieldType& in) {
+  switch (in) {
+    case blink::WebContextMenuData::InputFieldTypePlainText:
+      return mate::StringToV8(isolate, "plainText");
+    case blink::WebContextMenuData::InputFieldTypePassword:
+      return mate::StringToV8(isolate, "password");
+    case blink::WebContextMenuData::InputFieldTypeOther:
+      return mate::StringToV8(isolate, "other");
+    default:
+      return mate::StringToV8(isolate, "none");
+  }
+}
+
+v8::Local<v8::Value> EditFlagsToV8(v8::Isolate* isolate, int editFlags) {
+  mate::Dictionary dict = mate::Dictionary::CreateEmpty(isolate);
+  dict.Set("canUndo",
+      !!(editFlags & blink::WebContextMenuData::CanUndo));
+  dict.Set("canRedo",
+      !!(editFlags & blink::WebContextMenuData::CanRedo));
+  dict.Set("canCut",
+      !!(editFlags & blink::WebContextMenuData::CanCut));
+  dict.Set("canCopy",
+      !!(editFlags & blink::WebContextMenuData::CanCopy));
+
+  bool pasteFlag = false;
+  if (editFlags & blink::WebContextMenuData::CanPaste) {
+    std::vector<base::string16> types;
+    bool ignore;
+    ui::Clipboard::GetForCurrentThread()->ReadAvailableTypes(
+        ui::CLIPBOARD_TYPE_COPY_PASTE, &types, &ignore);
+    pasteFlag = !types.empty();
+  }
+  dict.Set("canPaste", pasteFlag);
+
+  dict.Set("canDelete",
+      !!(editFlags & blink::WebContextMenuData::CanDelete));
+  dict.Set("canSelectAll",
+      !!(editFlags & blink::WebContextMenuData::CanSelectAll));
+
+  return mate::ConvertToV8(isolate, dict);
+}
+
+v8::Local<v8::Value> MediaFlagsToV8(v8::Isolate* isolate, int mediaFlags) {
+  mate::Dictionary dict = mate::Dictionary::CreateEmpty(isolate);
+  dict.Set("inError",
+      !!(mediaFlags & blink::WebContextMenuData::MediaInError));
+  dict.Set("isPaused",
+      !!(mediaFlags & blink::WebContextMenuData::MediaPaused));
+  dict.Set("isMuted",
+      !!(mediaFlags & blink::WebContextMenuData::MediaMuted));
+  dict.Set("hasAudio",
+      !!(mediaFlags & blink::WebContextMenuData::MediaHasAudio));
+  dict.Set("isLooping",
+      (mediaFlags & blink::WebContextMenuData::MediaLoop) != 0);
+  dict.Set("isControlsVisible",
+      (mediaFlags & blink::WebContextMenuData::MediaControls) != 0);
+  dict.Set("canToggleControls",
+      !!(mediaFlags & blink::WebContextMenuData::MediaCanToggleControls));
+  dict.Set("canRotate",
+      !!(mediaFlags & blink::WebContextMenuData::MediaCanRotate));
+  return mate::ConvertToV8(isolate, dict);
+}
+
+v8::Local<v8::Value> Converter<blink::WebCache::ResourceTypeStat>::ToV8(
+    v8::Isolate* isolate,
+    const blink::WebCache::ResourceTypeStat& stat) {
+  mate::Dictionary dict = mate::Dictionary::CreateEmpty(isolate);
+  dict.Set("count", static_cast<uint32_t>(stat.count));
+  dict.Set("size", static_cast<double>(stat.size));
+  dict.Set("liveSize", static_cast<double>(stat.liveSize));
+  dict.Set("decodedSize", static_cast<double>(stat.decodedSize));
+  dict.Set("purgedSize", static_cast<double>(stat.purgedSize));
+  dict.Set("purgeableSize", static_cast<double>(stat.purgeableSize));
+  return dict.GetHandle();
+}
+
+v8::Local<v8::Value> Converter<blink::WebCache::ResourceTypeStats>::ToV8(
+    v8::Isolate* isolate,
+    const blink::WebCache::ResourceTypeStats& stats) {
+  mate::Dictionary dict = mate::Dictionary::CreateEmpty(isolate);
+  dict.Set("images", stats.images);
+  dict.Set("scripts", stats.scripts);
+  dict.Set("cssStyleSheets", stats.cssStyleSheets);
+  dict.Set("xslStyleSheets", stats.xslStyleSheets);
+  dict.Set("fonts", stats.fonts);
+  dict.Set("other", stats.other);
+  return dict.GetHandle();
 }
 
 }  // namespace mate

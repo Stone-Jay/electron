@@ -1,17 +1,18 @@
 # session
 
+> 브라우저 세션, 쿠키, 캐시, 프록시 설정 등을 관리합니다.
+
 `session` 모듈은 새로운 `Session` 객체를 만드는데 사용할 수 있습니다.
 
-또한 존재하는 [`BrowserWindow`](browser-window.md)의
-[`webContents`](web-contents.md)에서 `session` 속성으로 접근할 수도 있습니다.
+또한 [`WebContents`](web-contents.md)의 `session` 속성이나 `session` 모듈을 통해 현재 존재하는 페이지의 `session`에 접근할 수 있습니다.
 
 ```javascript
-var BrowserWindow = require('browser-window');
+const {session, BrowserWindow} = require('electron')
 
-var win = new BrowserWindow({ width: 800, height: 600 });
-win.loadURL("http://github.com");
+let win = new BrowserWindow({width: 800, height: 600})
+win.loadURL('http://github.com')
 
-var ses = win.webContents.session;
+let ses = win.webContents.session
 ```
 
 ## Methods
@@ -26,7 +27,7 @@ var ses = win.webContents.session;
 
 `partition`이 `persist:`로 시작하면 페이지는 지속성 세션을 사용하며 다른 모든 앱 내의
 페이지에서 같은 `partition`을 사용할 수 있습니다. 만약 `persist:` 접두어로 시작하지
-않으면 페이지는 인-메모리 세션을 사용합니다. `partition`을 지정하지 않으면 어플리케이션의
+않으면 페이지는 인-메모리 세션을 사용합니다. `partition`을 지정하지 않으면 애플리케이션의
 기본 세션이 반환됩니다.
 
 ## Properties
@@ -35,7 +36,7 @@ var ses = win.webContents.session;
 
 ### session.defaultSession
 
-어플리케이션의 기본 세션 객체를 반환합니다.
+애플리케이션의 기본 세션 객체를 반환합니다.
 
 ## Class: Session
 
@@ -44,7 +45,7 @@ var ses = win.webContents.session;
 ```javascript
 const session = require('electron').session;
 
-var ses = session.fromPartition('persist:name');
+const ses = session.fromPartition('persist:name');
  ```
 
 ### Instance Events
@@ -63,9 +64,9 @@ Electron의 `webContents`에서 `item`을 다운로드할 때 발생하는 이�
 틱부터 `item`을 사용할 수 없게 됩니다.
 
 ```javascript
-session.defaultSession.on('will-download', function(event, item, webContents) {
+session.defaultSession.on('will-download', (event, item, webContents) => {
   event.preventDefault();
-  require('request')(item.getURL(), function(data) {
+  require('request')(item.getURL(), (data) => {
     require('fs').writeFileSync('/somewhere', data);
   });
 });
@@ -73,91 +74,7 @@ session.defaultSession.on('will-download', function(event, item, webContents) {
 
 ### Instance Methods
 
-`Session` 객체는 다음과 같은 메서드와 속성을 가지고 있습니다:
-
-#### `ses.cookies`
-
-`cookies` 속성은 쿠키를 조작하는 방법을 제공합니다. 예를 들어 다음과 같이 할 수
-있습니다:
-
-```javascript
-// 모든 쿠키를 요청합니다.
-session.defaultSession.cookies.get({}, function(error, cookies) {
-  console.log(cookies);
-});
-
-// url에 관련된 쿠키를 모두 가져옵니다.
-session.defaultSession.cookies.get({ url : "http://www.github.com" }, function(error, cookies) {
-  console.log(cookies);
-});
-
-// 지정한 쿠키 데이터를 설정합니다.
-// 동일한 쿠키가 있으면 해당 쿠키를 덮어씁니다.
-var cookie = { url : "http://www.github.com", name : "dummy_name", value : "dummy" };
-session.defaultSession.cookies.set(cookie, function(error) {
-  if (error)
-    console.error(error);
-});
-```
-
-#### `ses.cookies.get(filter, callback)`
-
-* `filter` Object
-  * `url` String (optional) - `url`에 해당하는 쿠키를 취득합니다. 이 속성을
-  생략하면 모든 url에서 찾습니다.
-  * `name` String (optional) - 쿠키의 이름입니다.
-  * `domain` String (optional) - 도메인 또는 서브 도메인에 일치하는 쿠키를
-  취득합니다.
-  * `path` String (optional) - `path`에 일치하는 쿠키를 취득합니다.
-  * `secure` Boolean (optional) - 보안 속성에 따라 쿠키를 필터링합니다.
-  * `session` Boolean (optional) - 세션 또는 지속성 쿠키를 필터링합니다.
-* `callback` Function
-
-`details` 객체에서 묘사한 모든 쿠키를 요청합니다. 모든 작업이 끝나면 `callback`이
-`callback(error, cookies)` 형태로 호출됩니다.
-
-`cookies`는 `cookie` 객체의 배열입니다.
-
-* `cookie` Object
-  *  `name` String - 쿠키의 이름.
-  *  `value` String - 쿠키의 값.
-  *  `domain` String - 쿠키의 도메인.
-  *  `hostOnly` String - 쿠키가 호스트 전용인가에 대한 여부.
-  *  `path` String - 쿠키의 경로.
-  *  `secure` Boolean - 쿠키가 안전한 것으로 표시되는지에 대한 여부.
-  *  `httpOnly` Boolean - 쿠키가 HTTP로만 표시되는지에 대한 여부.
-  *  `session` Boolean - 쿠키가 세션 쿠키 또는 만료일이 있는 영구 쿠키인지에 대한
-    여부.
-  *  `expirationDate` Double - (Option) UNIX 시간으로 표시되는 쿠키의 만료일에
-    대한 초 단위 시간. 세션 쿠키는 지원되지 않음.
-
-#### `ses.cookies.set(details, callback)`
-
-* `details` Object
-  * `url` String - `url`에 관련된 쿠키를 가져옵니다.
-  * `name` String - 쿠키의 이름입니다. 기본적으로 비워두면 생략됩니다.
-  * `value` String - 쿠키의 값입니다. 기본적으로 비워두면 생략됩니다.
-  * `domain` String - 쿠키의 도메인입니다. 기본적으로 비워두면 생략됩니다.
-  * `path` String - 쿠키의 경로입니다. 기본적으로 비워두면 생략됩니다.
-  * `secure` Boolean - 쿠키가 안전한 것으로 표시되는지에 대한 여부입니다. 기본값은
-    false입니다.
-  * `session` Boolean - 쿠키가 HttpOnly로 표시되는지에 대한 여부입니다. 기본값은
-    false입니다.
-  * `expirationDate` Double (optional) -	UNIX 시간으로 표시되는 쿠키의 만료일에
-    대한 초 단위 시간입니다. 세션 쿠키에 제공되지 않습니다.
-* `callback` Function
-
-`details` 객체에 따라 쿠키를 설정합니다. 작업이 완료되면 `callback`이
-`callback(error)` 형태로 호출됩니다.
-
-#### `ses.cookies.remove(url, name, callback)`
-
-* `url` String - 쿠키와 관련된 URL입니다.
-* `name` String - 지울 쿠키의 이름입니다.
-* `callback` Function
-
-`url`과 `name`에 일치하는 쿠키를 삭제합니다. 작업이 완료되면 `callback`이
-`callback()` 형식으로 호출됩니다.
+`Session` 객체는 다음과 같은 메서드를 가지고 있습니다:
 
 #### `ses.getCacheSize(callback)`
 
@@ -229,7 +146,7 @@ proxyURL = [<proxyScheme>"://"]<proxyHost>[":"<proxyPort>]
 * `http=foopy;socks=foopy2` - http:// URL에 `foopy` HTTP 프록시를 사용합니다.
   그리고 `socks4://foopy2` 프록시를 다른 모든 URL에 사용합니다.
 
-### `app.resolveProxy(url, callback)`
+#### `ses.resolveProxy(url, callback)`
 
 * `url` URL
 * `callback` Function
@@ -241,7 +158,7 @@ proxyURL = [<proxyScheme>"://"]<proxyHost>[":"<proxyPort>]
 
 * `path` String - 다운로드 위치
 
-다운로드 저장 위치를 지정합니다. 기본 다운로드 위치는 각 어플리케이션 데이터 디렉터리의
+다운로드 저장 위치를 지정합니다. 기본 다운로드 위치는 각 애플리케이션 데이터 디렉터리의
 `Downloads` 폴더입니다.
 
 #### `ses.enableNetworkEmulation(options)`
@@ -282,8 +199,8 @@ window.webContents.session.enableNetworkEmulation({offline: true});
 `setCertificateVerifyProc(null)`을 호출하면 기본 검증 프로세스로 되돌립니다.
 
 ```javascript
-myWindow.webContents.session.setCertificateVerifyProc(function(hostname, cert, callback) {
- if (hostname == 'github.com')
+myWindow.webContents.session.setCertificateVerifyProc((hostname, cert, callback) => {
+ if (hostname === 'github.com')
    callback(true);
  else
    callback(false);
@@ -302,9 +219,9 @@ myWindow.webContents.session.setCertificateVerifyProc(function(hostname, cert, c
 호출하면 권한 제공을 거부합니다.
 
 ```javascript
-session.fromPartition(partition).setPermissionRequestHandler(function(webContents, permission, callback) {
+session.fromPartition(partition).setPermissionRequestHandler((webContents, permission, callback) => {
   if (webContents.getURL() === host) {
-    if (permission == "notifications") {
+    if (permission === 'notifications') {
       callback(false); // 거부됨.
       return;
     }
@@ -320,14 +237,172 @@ session.fromPartition(partition).setPermissionRequestHandler(function(webContent
 
 호스트 리소버(resolver) 캐시를 지웁니다.
 
+#### `ses.allowNTLMCredentialsForDomains(domains)`
+
+* `domains` String - 통합 인증을 사용하도록 설정할 쉼표로 구분된 서버의 리스트.
+
+동적으로 HTTP NTML 또는 Negotiate 인증을 위해 언제나 자격 증명을 보낼지 여부를
+설정합니다.
+
+```javascript
+// 통합 인증을 위해 `example.com`, `foobar.com`, `baz`로 끝나는
+// 모든 url을 지정합니다.
+session.defaultSession.allowNTLMCredentialsForDomains('*example.com, *foobar.com, *baz')
+
+// 통합 인증을 위해 모든 url을 지정합니다.
+session.defaultSession.allowNTLMCredentialsForDomains('*')
+```
+
+#### `ses.setUserAgent(userAgent[, acceptLanguages])`
+
+* `userAgent` String
+* `acceptLanguages` String (optional)
+
+현재 세션에 대해 `userAgent`와 `acceptLanguages`를 덮어씁니다.
+
+`acceptLanguages`는 반드시 쉼표로 구분된 순서에 맞춘 언어 코드의 리스트여야 하며
+예를 들면 `"en-US,fr,de,ko,zh-CN,ja"` 입니다.
+
+이는 현재 존재하는 `WebContents`에 적용되지 않으며 각 `WebContents`는
+`webContents.setUserAgent`를 사용하여 세션 전체의 유저 에이전트를 덮어쓸 수 있습니다.
+
+#### `ses.getUserAgent()`
+
+현재 세션의 유저 에이전트를 표현하는 `String`을 반환합니다.
+
+### Instance Properties
+
+다음은 `Session` 인스턴스에서 사용할 수 있는 속성들입니다:
+
+#### `ses.cookies`
+
+현재 세션의 `Cookies` 클래스 인스턴스를 반환합니다.
+
 #### `ses.webRequest`
 
-`webRequest` API는 생명주기의 다양한 단계에 맞춰 요청 컨텐츠를 가로채거나 변경할 수
-있도록 합니다.
+현재 세션의 `WebRequest` 클래스 인스턴스를 반환합니다.
 
-각 API는 `filter`와 `listener`를 선택적으로 받을 수 있습니다. `listener`는 API의
-이벤트가 발생했을 때 `listener(details)` 형태로 호출되며 `defails`는 요청을 묘사하는
-객체입니다. `listener`에 `null`을 전달하면 이벤트 수신을 중지합니다.
+#### `ses.protocol`
+
+현재 세션의 [protocol](protocol.md) 모듈 인스턴스를 반환합니다.
+
+```javascript
+const {app, session} = require('electron')
+const path = require('path')
+
+app.on('ready', function () {
+  const protocol = session.fromPartition(partitionName).protocol
+  protocol.registerFileProtocol('atom', function (request, callback) {
+    var url = request.url.substr(7)
+    callback({path: path.normalize(__dirname + '/' + url)})
+  }, function (error) {
+    if (error)
+      console.error('Failed to register protocol')
+  })
+})
+```
+
+## Class: Cookies
+
+`Cookies` 클래스는 쿠키를 탐색하고 조작하는 방법을 제공합니다. `Cookies` 클래스의
+인스턴스는 반드시 `Session` 클래스의 `cookies` 속성에서 접근해야 합니다.
+
+예를 들어:
+
+```javascript
+// 모든 쿠키를 요청합니다.
+session.defaultSession.cookies.get({}, (error, cookies) => {
+  console.log(cookies);
+});
+
+// url에 관련된 쿠키를 모두 가져옵니다.
+session.defaultSession.cookies.get({url: 'http://www.github.com'}, (error, cookies) => {
+  console.log(cookies);
+});
+
+// 지정한 쿠키 데이터를 설정합니다.
+// 동일한 쿠키가 있으면 해당 쿠키를 덮어씁니다.
+const cookie = {url: 'http://www.github.com', name: 'dummy_name', value: 'dummy'};
+session.defaultSession.cookies.set(cookie, (error) => {
+  if (error)
+    console.error(error);
+});
+```
+
+### Instance Methods
+
+다음은 `Cookies` 객체에서 사용할 수 있는 메서드들입니다:
+
+#### `ses.cookies.get(filter, callback)`
+
+* `filter` Object
+  * `url` String (optional) - `url`에 해당하는 쿠키를 취득합니다. 이 속성을
+  생략하면 모든 url에서 찾습니다.
+  * `name` String (optional) - 쿠키의 이름입니다.
+  * `domain` String (optional) - 도메인 또는 서브 도메인에 일치하는 쿠키를
+  취득합니다.
+  * `path` String (optional) - `path`에 일치하는 쿠키를 취득합니다.
+  * `secure` Boolean (optional) - 보안 속성에 따라 쿠키를 필터링합니다.
+  * `session` Boolean (optional) - 세션 또는 지속성 쿠키를 필터링합니다.
+* `callback` Function
+
+`details` 객체에서 묘사한 모든 쿠키를 요청합니다. 모든 작업이 끝나면 `callback`이
+`callback(error, cookies)` 형태로 호출됩니다.
+
+`cookies`는 `cookie` 객체의 배열입니다.
+
+* `cookie` Object
+  *  `name` String - 쿠키의 이름.
+  *  `value` String - 쿠키의 값.
+  *  `domain` String - 쿠키의 도메인.
+  *  `hostOnly` String - 쿠키가 호스트 전용인가에 대한 여부.
+  *  `path` String - 쿠키의 경로.
+  *  `secure` Boolean - 쿠키가 안전한 것으로 표시되는지에 대한 여부.
+  *  `httpOnly` Boolean - 쿠키가 HTTP로만 표시되는지에 대한 여부.
+  *  `session` Boolean - 쿠키가 세션 쿠키 또는 만료일이 있는 영구 쿠키인지에 대한
+    여부.
+  *  `expirationDate` Double - (Option) UNIX 시간으로 표시되는 쿠키의 만료일에
+    대한 초 단위 시간. 세션 쿠키는 지원되지 않음.
+
+#### `ses.cookies.set(details, callback)`
+
+* `details` Object
+  * `url` String - 쿠키에 대한 `url` 링크.
+  * `name` String - 쿠키의 이름입니다. 기본적으로 비워두면 생략됩니다.
+  * `value` String - 쿠키의 값입니다. 기본적으로 비워두면 생략됩니다.
+  * `domain` String - 쿠키의 도메인입니다. 기본적으로 비워두면 생략됩니다.
+  * `path` String - 쿠키의 경로입니다. 기본적으로 비워두면 생략됩니다.
+  * `secure` Boolean - 쿠키가 안전한 것으로 표시되는지에 대한 여부입니다. 기본값은
+    false입니다.
+  * `httpOnly` Boolean - 쿠키가 Http 전용으로 표시되는지에 대한 여부입니다. 기본값은
+    false입니다.
+  * `expirationDate` Double (optional) -	UNIX 시간으로 표시되는 쿠키의 만료일에
+    대한 초 단위 시간입니다. 생략되면 쿠키가 세션 쿠기가 되며 세션 사이에 유지되지
+    않게 됩니다.
+* `callback` Function
+
+`details` 객체에 따라 쿠키를 설정합니다. 작업이 완료되면 `callback`이
+`callback(error)` 형태로 호출됩니다.
+
+#### `ses.cookies.remove(url, name, callback)`
+
+* `url` String - 쿠키와 관련된 URL입니다.
+* `name` String - 지울 쿠키의 이름입니다.
+* `callback` Function
+
+`url`과 `name`에 일치하는 쿠키를 삭제합니다. 작업이 완료되면 `callback`이
+`callback()` 형식으로 호출됩니다.
+
+## Class: WebRequest
+
+`WebRequest` 클래스는 생명 주기의 다양한 단계에서 요청의 콘텐츠를 조작하거나 가로채는
+방법을 제공합니다. `WebRequest` 클래스는 반드시 `Session` 클래스의 `webRequest`
+속성에서 접근해야 합니다.
+
+`WebRequest`의 메서드는 선택적인 `filter`와 `listener` 속성을 허용하며 `listener`는
+API의 이벤트가 발생했을 때 `listener(details)` 형식으로 호출되고, `details`는 요청에
+관한 내용을 표현하는 객체입니다. `listener`에 `null`을 전달하면 이벤트의 구독을
+해제합니다.
 
 `filter`는 `urls` 속성을 가진 객체입니다. 이 속성은 URL 규칙의 배열이며 URL 규칙에
 일치하지 않는 요청을 모두 거르는데 사용됩니다. 만약 `filter`가 생략되면 모든 요청을
@@ -336,19 +411,25 @@ session.fromPartition(partition).setPermissionRequestHandler(function(webContent
 어떤 `listener`의 이벤트들은 `callback`을 같이 전달하는데, 이벤트 처리시
 `listener`의 작업을 완료한 후 `response` 객체를 포함하여 호출해야 합니다.
 
+다음은 요청에 `User-Agent` 헤더를 추가하는 예시입니다:
+
 ```javascript
 // 다음 url에 대한 User Agent를 조작합니다.
-var filter = {
-  urls: ["https://*.github.com/*", "*://electron.github.io"]
-};
+const filter = {
+  urls: ['https://*.github.com/*', '*://electron.github.io']
+}
 
-session.defaultSession.webRequest.onBeforeSendHeaders(filter, function(details, callback) {
-  details.requestHeaders['User-Agent'] = "MyAgent";
-  callback({cancel: false, requestHeaders: details.requestHeaders});
-});
+session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+  details.requestHeaders['User-Agent'] = "MyAgent"
+  callback({cancel: false, requestHeaders: details.requestHeaders})
+})
 ```
 
-#### `ses.webRequest.onBeforeRequest([filter, ]listener)`
+### Instance Methods
+
+다음은 `WebRequest` 객체에서 사용할 수 있는 메서드들입니다:
+
+#### `webRequest.onBeforeRequest([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -367,7 +448,7 @@ session.defaultSession.webRequest.onBeforeSendHeaders(filter, function(details, 
 `uploadData`는 `data` 객체의 배열입니다:
 
 * `data` Object
-  * `bytes` Buffer - 전송될 컨텐츠.
+  * `bytes` Buffer - 전송될 콘텐츠.
   * `file` String - 업로드될 파일의 경로.
 
 `callback`은 `response` 객체와 함께 호출되어야 합니다:
@@ -377,7 +458,7 @@ session.defaultSession.webRequest.onBeforeSendHeaders(filter, function(details, 
   * `redirectURL` String (optional) - 원래 요청은 전송과 완료가 방지되지만 이
     속성을 지정하면 해당 URL로 리다이렉트됩니다.
 
-#### `ses.webRequest.onBeforeSendHeaders([filter, ]listener)`
+#### `webRequest.onBeforeSendHeaders([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -402,7 +483,7 @@ HTTP 요청을 보내기 전 요청 헤더를 사용할 수 있을 때 `listener
   * `requestHeaders` Object (optional) - 이 속성이 제공되면, 요청은 이 헤더로
     만들어 집니다.
 
-#### `ses.webRequest.onSendHeaders([filter, ]listener)`
+#### `webRequest.onSendHeaders([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -419,7 +500,7 @@ HTTP 요청을 보내기 전 요청 헤더를 사용할 수 있을 때 `listener
   * `timestamp` Double
   * `requestHeaders` Object
 
-#### `ses.webRequest.onHeadersReceived([filter, ]listener)`
+#### `webRequest.onHeadersReceived([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -448,7 +529,7 @@ HTTP 요청을 보내기 전 요청 헤더를 사용할 수 있을 때 `listener
     변경하기 위해 반드시 지정되어야 합니다. 그렇지 않은 경우, 기존의 응답 헤더의 상태가
     사용됩니다.
 
-#### `ses.webRequest.onResponseStarted([filter, ]listener)`
+#### `webRequest.onResponseStarted([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -467,7 +548,7 @@ HTTP 요청을 보내기 전 요청 헤더를 사용할 수 있을 때 `listener
   * `statusCode` Integer
   * `statusLine` String
 
-#### `ses.webRequest.onBeforeRedirect([filter, ]listener)`
+#### `webRequest.onBeforeRedirect([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -487,7 +568,7 @@ HTTP 요청을 보내기 전 요청 헤더를 사용할 수 있을 때 `listener
   * `fromCache` Boolean
   * `responseHeaders` Object
 
-#### `ses.webRequest.onCompleted([filter, ]listener)`
+#### `webRequest.onCompleted([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function
@@ -505,7 +586,7 @@ HTTP 요청을 보내기 전 요청 헤더를 사용할 수 있을 때 `listener
   * `statusCode` Integer
   * `statusLine` String
 
-#### `ses.webRequest.onErrorOccurred([filter, ]listener)`
+#### `webRequest.onErrorOccurred([filter, ]listener)`
 
 * `filter` Object
 * `listener` Function

@@ -8,22 +8,22 @@ This module does not include a web interface so you need to open
 result.
 
 ```javascript
-const contentTracing = require('electron').contentTracing;
+const {contentTracing} = require('electron')
 
 const options = {
   categoryFilter: '*',
   traceOptions: 'record-until-full,enable-sampling'
 }
 
-contentTracing.startRecording(options, function() {
-  console.log('Tracing started');
+contentTracing.startRecording(options, () => {
+  console.log('Tracing started')
 
-  setTimeout(function() {
-    contentTracing.stopRecording('', function(path) {
-      console.log('Tracing data recorded to ' + path);
-    });
-  }, 5000);
-});
+  setTimeout(() => {
+    contentTracing.stopRecording('', (path) => {
+      console.log('Tracing data recorded to ' + path)
+    })
+  }, 5000)
+})
 ```
 
 ## Methods

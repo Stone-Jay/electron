@@ -9,7 +9,10 @@
 #include "atom/browser/atom_browser_main_parts.h"
 #include "atom/browser/native_window.h"
 #include "atom/browser/window_list.h"
+#include "base/files/file_util.h"
 #include "base/message_loop/message_loop.h"
+#include "base/path_service.h"
+#include "brightray/browser/brightray_paths.h"
 
 namespace atom {
 
@@ -45,7 +48,10 @@ void Browser::Quit() {
   window_list->CloseAllWindows();
 }
 
-void Browser::Exit(int code) {
+void Browser::Exit(mate::Arguments* args) {
+  int code = 0;
+  args->GetNext(&code);
+
   if (!AtomBrowserMainParts::Get()->SetExitCode(code)) {
     // Message loop is not ready, quit directly.
     exit(code);
@@ -115,6 +121,10 @@ void Browser::SetName(const std::string& name) {
   name_override_ = name;
 }
 
+int Browser::GetBadgeCount() {
+  return badge_count_;
+}
+
 bool Browser::OpenFile(const std::string& file_path) {
   bool prevent_default = false;
   FOR_EACH_OBSERVER(BrowserObserver,
@@ -139,12 +149,27 @@ void Browser::WillFinishLaunching() {
 }
 
 void Browser::DidFinishLaunching() {
+  // Make sure the userData directory is created.
+  base::FilePath user_data;
+  if (PathService::Get(brightray::DIR_USER_DATA, &user_data))
+    base::CreateDirectoryAndGetError(user_data, nullptr);
+
   is_ready_ = true;
   FOR_EACH_OBSERVER(BrowserObserver, observers_, OnFinishLaunching());
 }
 
-void Browser::RequestLogin(LoginHandler* login_handler) {
-  FOR_EACH_OBSERVER(BrowserObserver, observers_, OnLogin(login_handler));
+void Browser::OnAccessibilitySupportChanged() {
+  FOR_EACH_OBSERVER(BrowserObserver,
+                    observers_,
+                    OnAccessibilitySupportChanged());
+}
+
+void Browser::RequestLogin(
+    LoginHandler* login_handler,
+    std::unique_ptr<base::DictionaryValue> request_details) {
+  FOR_EACH_OBSERVER(BrowserObserver,
+                    observers_,
+                    OnLogin(login_handler, *(request_details.get())));
 }
 
 void Browser::NotifyAndShutdown() {

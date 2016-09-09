@@ -44,10 +44,10 @@ extern const char kDisableAutoHideCursor[];
 extern const char kStandardWindow[];
 extern const char kBackgroundColor[];
 extern const char kHasShadow[];
+extern const char kFocusable[];
 extern const char kWebPreferences[];
 
 // WebPreferences.
-extern const char kDirectWrite[];
 extern const char kZoomFactor[];
 extern const char kPreloadScript[];
 extern const char kPreloadURL[];
@@ -56,7 +56,9 @@ extern const char kGuestInstanceID[];
 extern const char kExperimentalFeatures[];
 extern const char kExperimentalCanvasFeatures[];
 extern const char kOpenerID[];
+extern const char kScrollBounce[];
 extern const char kBlinkFeatures[];
+extern const char kDisableBlinkFeatures[];
 
 }   // namespace options
 
@@ -69,7 +71,7 @@ extern const char kEnablePlugins[];
 extern const char kPpapiFlashPath[];
 extern const char kPpapiFlashVersion[];
 extern const char kDisableHttpCache[];
-extern const char kRegisterStandardSchemes[];
+extern const char kStandardSchemes[];
 extern const char kRegisterServiceWorkerSchemes[];
 extern const char kSSLVersionFallbackMin[];
 extern const char kCipherSuiteBlacklist[];
@@ -82,6 +84,7 @@ extern const char kPreloadURL[];
 extern const char kNodeIntegration[];
 extern const char kGuestInstanceID[];
 extern const char kOpenerID[];
+extern const char kScrollBounce[];
 
 extern const char kWidevineCdmPath[];
 extern const char kWidevineCdmVersion[];

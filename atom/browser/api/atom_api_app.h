@@ -26,9 +26,13 @@ class FilePath;
 
 namespace mate {
 class Arguments;
-}
+}  // namespace mate
 
 namespace atom {
+
+#if defined(OS_WIN)
+enum class JumpListResult : int;
+#endif
 
 namespace api {
 
@@ -40,7 +44,7 @@ class App : public AtomBrowserClient::Delegate,
   static mate::Handle<App> Create(v8::Isolate* isolate);
 
   static void BuildPrototype(v8::Isolate* isolate,
-                             v8::Local<v8::ObjectTemplate> prototype);
+                             v8::Local<v8::FunctionTemplate> prototype);
 
   // Called when window with disposition needs to be created.
   void OnCreateWindow(const GURL& target_url,
@@ -51,9 +55,9 @@ class App : public AtomBrowserClient::Delegate,
 
 #if defined(USE_NSS_CERTS)
   void OnCertificateManagerModelCreated(
-      scoped_ptr<base::DictionaryValue> options,
+      std::unique_ptr<base::DictionaryValue> options,
       const net::CompletionCallback& callback,
-      scoped_ptr<CertificateManagerModel> model);
+      std::unique_ptr<CertificateManagerModel> model);
 #endif
 
  protected:
@@ -70,7 +74,15 @@ class App : public AtomBrowserClient::Delegate,
   void OnActivate(bool has_visible_windows) override;
   void OnWillFinishLaunching() override;
   void OnFinishLaunching() override;
-  void OnLogin(LoginHandler* login_handler) override;
+  void OnLogin(LoginHandler* login_handler,
+               const base::DictionaryValue& request_details) override;
+  void OnAccessibilitySupportChanged() override;
+#if defined(OS_MACOSX)
+  void OnContinueUserActivity(
+      bool* prevent_default,
+      const std::string& type,
+      const base::DictionaryValue& user_info) override;
+#endif
 
   // content::ContentBrowserClient:
   void AllowCertificateError(
@@ -87,7 +99,7 @@ class App : public AtomBrowserClient::Delegate,
   void SelectClientCertificate(
       content::WebContents* web_contents,
       net::SSLCertRequestInfo* cert_request_info,
-      scoped_ptr<content::ClientCertificateDelegate> delegate) override;
+      std::unique_ptr<content::ClientCertificateDelegate> delegate) override;
 
   // content::GpuDataManagerObserver:
   void OnGpuProcessCrashed(base::TerminationStatus exit_code) override;
@@ -100,20 +112,30 @@ class App : public AtomBrowserClient::Delegate,
                const base::FilePath& path);
 
   void SetDesktopName(const std::string& desktop_name);
-  void AllowNTLMCredentialsForAllDomains(bool should_allow);
+  std::string GetLocale();
   bool MakeSingleInstance(
       const ProcessSingleton::NotificationCallback& callback);
-  std::string GetLocale();
-
+  void ReleaseSingleInstance();
+  bool Relaunch(mate::Arguments* args);
+  void DisableHardwareAcceleration(mate::Arguments* args);
+  bool IsAccessibilitySupportEnabled();
 #if defined(USE_NSS_CERTS)
   void ImportCertificate(const base::DictionaryValue& options,
                          const net::CompletionCallback& callback);
 #endif
 
-  scoped_ptr<ProcessSingleton> process_singleton_;
+#if defined(OS_WIN)
+  // Get the current Jump List settings.
+  v8::Local<v8::Value> GetJumpListSettings();
+
+  // Set or remove a custom Jump List for the application.
+  JumpListResult SetJumpList(v8::Local<v8::Value> val, mate::Arguments* args);
+#endif  // defined(OS_WIN)
+
+  std::unique_ptr<ProcessSingleton> process_singleton_;
 
 #if defined(USE_NSS_CERTS)
-  scoped_ptr<CertificateManagerModel> certificate_manager_model_;
+  std::unique_ptr<CertificateManagerModel> certificate_manager_model_;
 #endif
 
   DISALLOW_COPY_AND_ASSIGN(App);

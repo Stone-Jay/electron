@@ -11,9 +11,8 @@
 #include "atom/common/api/locker.h"
 #include "atom/common/atom_command_line.h"
 #include "atom/common/native_mate_converters/file_path_converter.h"
-#include "atom/common/node_includes.h"
-#include "base/command_line.h"
 #include "base/base_paths.h"
+#include "base/command_line.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/message_loop/message_loop.h"
@@ -21,7 +20,8 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_paths.h"
 #include "native_mate/dictionary.h"
-#include "third_party/WebKit/public/web/WebScopedMicrotaskSuppression.h"
+
+#include "atom/common/node_includes.h"
 
 using content::BrowserThread;
 
@@ -43,6 +43,7 @@ REFERENCE_MODULE(atom_browser_power_monitor);
 REFERENCE_MODULE(atom_browser_power_save_blocker);
 REFERENCE_MODULE(atom_browser_protocol);
 REFERENCE_MODULE(atom_browser_global_shortcut);
+REFERENCE_MODULE(atom_browser_render_process_preferences);
 REFERENCE_MODULE(atom_browser_session);
 REFERENCE_MODULE(atom_browser_system_preferences);
 REFERENCE_MODULE(atom_browser_tray);
@@ -52,7 +53,6 @@ REFERENCE_MODULE(atom_browser_window);
 REFERENCE_MODULE(atom_common_asar);
 REFERENCE_MODULE(atom_common_clipboard);
 REFERENCE_MODULE(atom_common_crash_reporter);
-REFERENCE_MODULE(atom_common_id_weak_map);
 REFERENCE_MODULE(atom_common_native_image);
 REFERENCE_MODULE(atom_common_screen);
 REFERENCE_MODULE(atom_common_shell);
@@ -73,16 +73,12 @@ namespace atom {
 
 namespace {
 
-// Empty callback for async handle.
-void UvNoOp(uv_async_t* handle) {
-}
-
 // Convert the given vector to an array of C-strings. The strings in the
 // returned vector are only guaranteed valid so long as the vector of strings
 // is not modified.
-scoped_ptr<const char*[]> StringVectorToArgArray(
+std::unique_ptr<const char*[]> StringVectorToArgArray(
     const std::vector<std::string>& vector) {
-  scoped_ptr<const char*[]> array(new const char*[vector.size()]);
+  std::unique_ptr<const char*[]> array(new const char*[vector.size()]);
   for (size_t i = 0; i < vector.size(); ++i) {
     array[i] = vector[i].c_str();
   }
@@ -147,7 +143,7 @@ void NodeBindings::Initialize() {
 #if defined(OS_WIN)
   // uv_init overrides error mode to suppress the default crash dialog, bring
   // it back if user wants to show it.
-  scoped_ptr<base::Environment> env(base::Environment::Create());
+  std::unique_ptr<base::Environment> env(base::Environment::Create());
   if (env->HasVar("ELECTRON_DEFAULT_ERROR_MODE"))
     SetErrorMode(0);
 #endif
@@ -168,10 +164,16 @@ node::Environment* NodeBindings::CreateEnvironment(
   std::string script_path_str = script_path.AsUTF8Unsafe();
   args.insert(args.begin() + 1, script_path_str.c_str());
 
-  scoped_ptr<const char*[]> c_argv = StringVectorToArgArray(args);
+  std::unique_ptr<const char*[]> c_argv = StringVectorToArgArray(args);
   node::Environment* env = node::CreateEnvironment(
       context->GetIsolate(), uv_default_loop(), context,
       args.size(), c_argv.get(), 0, nullptr);
+
+  // Node uses the deprecated SetAutorunMicrotasks(false) mode, we should switch
+  // to use the scoped policy to match blink's behavior.
+  if (!is_browser_) {
+    context->GetIsolate()->SetMicrotasksPolicy(v8::MicrotasksPolicy::kScoped);
+  }
 
   mate::Dictionary process(context->GetIsolate(), env->process_object());
   process.Set("type", process_type);
@@ -183,6 +185,13 @@ node::Environment* NodeBindings::CreateEnvironment(
   base::FilePath helper_exec_path;
   PathService::Get(content::CHILD_PROCESS_EXE, &helper_exec_path);
   process.Set("helperExecPath", helper_exec_path);
+
+  // Set process._debugWaitConnect if --debug-brk was specified to stop
+  // the debugger on the first line
+  if (is_browser_ &&
+      base::CommandLine::ForCurrentProcess()->HasSwitch("debug-brk"))
+    process.Set("_debugWaitConnect", true);
+
   return env;
 }
 
@@ -196,7 +205,7 @@ void NodeBindings::PrepareMessageLoop() {
 
   // Add dummy handle for libuv, otherwise libuv would quit when there is
   // nothing to do.
-  uv_async_init(uv_loop_, &dummy_uv_handle_, UvNoOp);
+  uv_async_init(uv_loop_, &dummy_uv_handle_, nullptr);
 
   // Start worker that will interrupt main loop when having uv events.
   uv_sem_init(&embed_sem_, 0);
@@ -217,7 +226,6 @@ void NodeBindings::UvRunOnce() {
   DCHECK(!is_browser_ || BrowserThread::CurrentlyOn(BrowserThread::UI));
 
   node::Environment* env = uv_env();
-  CHECK(env);
 
   // Use Locker in browser process.
   mate::Locker locker(env->isolate());
@@ -227,12 +235,12 @@ void NodeBindings::UvRunOnce() {
   v8::Context::Scope context_scope(env->context());
 
   // Perform microtask checkpoint after running JavaScript.
-  scoped_ptr<blink::WebScopedRunV8Script> script_scope(
-      is_browser_ ? nullptr : new blink::WebScopedRunV8Script);
+  v8::MicrotasksScope script_scope(env->isolate(),
+                                   v8::MicrotasksScope::kRunMicrotasks);
 
   // Deal with uv events.
   int r = uv_run(uv_loop_, UV_RUN_NOWAIT);
-  if (r == 0 || uv_loop_->stop_flag != 0)
+  if (r == 0)
     message_loop_->QuitWhenIdle();  // Quit from uv.
 
   // Tell the worker thread to continue polling.

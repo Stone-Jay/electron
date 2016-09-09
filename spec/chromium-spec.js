@@ -1,12 +1,11 @@
-
 const assert = require('assert')
 const http = require('http')
 const path = require('path')
 const ws = require('ws')
+const url = require('url')
 const remote = require('electron').remote
 
-const BrowserWindow = remote.require('electron').BrowserWindow
-const session = remote.require('electron').session
+const {BrowserWindow, session, webContents} = remote
 
 const isCI = remote.getGlobal('isCi')
 
@@ -55,18 +54,22 @@ describe('chromium feature', function () {
       w = new BrowserWindow({
         show: false
       })
-      w.webContents.on('ipc-message', function (event, args) {
+      w.webContents.once('ipc-message', function (event, args) {
         assert.deepEqual(args, ['hidden', true])
         done()
       })
       w.loadURL(url)
     })
 
+    if (isCI && process.platform === 'win32') {
+      return
+    }
+
     it('is set correctly when window is inactive', function (done) {
       w = new BrowserWindow({
         show: false
       })
-      w.webContents.on('ipc-message', function (event, args) {
+      w.webContents.once('ipc-message', function (event, args) {
         assert.deepEqual(args, ['hidden', false])
         done()
       })
@@ -95,6 +98,9 @@ describe('chromium feature', function () {
       return
     }
     if (isCI && process.platform === 'linux') {
+      return
+    }
+    if (isCI && process.platform === 'win32') {
       return
     }
 
@@ -148,12 +154,22 @@ describe('chromium feature', function () {
   })
 
   describe('window.open', function () {
+    if (process.env.TRAVIS === 'true' && process.platform === 'darwin') {
+      return
+    }
+
     this.timeout(20000)
 
     it('returns a BrowserWindowProxy object', function () {
       var b = window.open('about:blank', '', 'show=no')
       assert.equal(b.closed, false)
       assert.equal(b.constructor.name, 'BrowserWindowProxy')
+
+      // Check that guestId is not writeable
+      assert(b.guestId)
+      b.guestId = 'anotherValue'
+      assert.notEqual(b.guestId, 'anoterValue')
+
       b.close()
     })
 
@@ -219,12 +235,13 @@ describe('chromium feature', function () {
 
     it('defines a window.location getter', function (done) {
       var b, targetURL
-      if (process.platform == 'win32')
+      if (process.platform === 'win32') {
         targetURL = 'file:///' + fixtures.replace(/\\/g, '/') + '/pages/base-page.html'
-      else
+      } else {
         targetURL = 'file://' + fixtures + '/pages/base-page.html'
+      }
       b = window.open(targetURL)
-      BrowserWindow.fromId(b.guestId).webContents.once('did-finish-load', function () {
+      webContents.fromId(b.guestId).once('did-finish-load', function () {
         assert.equal(b.location, targetURL)
         b.close()
         done()
@@ -235,10 +252,10 @@ describe('chromium feature', function () {
       // Load a page that definitely won't redirect
       var b
       b = window.open('about:blank')
-      BrowserWindow.fromId(b.guestId).webContents.once('did-finish-load', function () {
+      webContents.fromId(b.guestId).once('did-finish-load', function () {
         // When it loads, redirect
         b.location = 'file://' + fixtures + '/pages/base-page.html'
-        BrowserWindow.fromId(b.guestId).webContents.once('did-finish-load', function () {
+        webContents.fromId(b.guestId).once('did-finish-load', function () {
           // After our second redirect, cleanup and callback
           b.close()
           done()
@@ -261,7 +278,7 @@ describe('chromium feature', function () {
       w = new BrowserWindow({
         show: false
       })
-      w.webContents.on('ipc-message', function (event, args) {
+      w.webContents.once('ipc-message', function (event, args) {
         assert.deepEqual(args, ['opener', null])
         done()
       })
@@ -297,7 +314,7 @@ describe('chromium feature', function () {
       }
       window.addEventListener('message', listener)
       b = window.open('file://' + fixtures + '/pages/window-open-postMessage.html', '', 'show=no')
-      BrowserWindow.fromId(b.guestId).webContents.once('did-finish-load', function () {
+      webContents.fromId(b.guestId).once('did-finish-load', function () {
         b.postMessage('testing', '*')
       })
     })
@@ -316,6 +333,25 @@ describe('chromium feature', function () {
       window.addEventListener('message', listener)
       b = window.open('file://' + fixtures + '/pages/window-opener-postMessage.html', '', 'show=no')
     })
+
+    it('supports windows opened from a <webview>', function (done) {
+      const webview = new WebView()
+      webview.addEventListener('console-message', function (e) {
+        webview.remove()
+        assert.equal(e.message, 'message')
+        done()
+      })
+      webview.allowpopups = true
+      webview.src = url.format({
+        pathname: `${fixtures}/pages/webview-opener-postMessage.html`,
+        protocol: 'file',
+        query: {
+          p: `${fixtures}/pages/window-opener-postMessage.html`
+        },
+        slashes: true
+      })
+      document.body.appendChild(webview)
+    })
   })
 
   describe('creating a Uint8Array under browser side', function () {
@@ -327,6 +363,10 @@ describe('chromium feature', function () {
   })
 
   describe('webgl', function () {
+    if (isCI && process.platform === 'win32') {
+      return
+    }
+
     it('can be get as context in canvas', function () {
       if (process.platform === 'linux') return
 
@@ -453,6 +493,28 @@ describe('chromium feature', function () {
         })
         document.createElement('y-element')
         called = true
+      })
+    })
+  })
+
+  describe('fetch', function () {
+    it('does not crash', function (done) {
+      const server = http.createServer(function (req, res) {
+        res.end('test')
+        server.close()
+      })
+      server.listen(0, '127.0.0.1', function () {
+        const port = server.address().port
+        fetch(`http://127.0.0.1:${port}`).then((res) => {
+          return res.body.getReader()
+        }).then((reader) => {
+          reader.read().then((r) => {
+            reader.cancel()
+            done()
+          })
+        }).catch(function (e) {
+          done(e)
+        })
       })
     })
   })

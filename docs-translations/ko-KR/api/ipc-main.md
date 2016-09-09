@@ -1,5 +1,7 @@
 ﻿# ipcMain
 
+> 메인 프로세스에서 렌더러 프로세스로 비동기 통신을 합니다.
+
 `ipcMain` 모듈은 [EventEmitter](https://nodejs.org/api/events.html) 클래스의
 인스턴스입니다. 메인 프로세스에서 사용하면, 렌더러 프로세스(웹 페이지)에서 전달된
 동기, 비동기 메시지를 주고 받는 방법을 제공합니다. 렌더러 프로세스에서 메시지를 전달하면
@@ -14,17 +16,17 @@
 * 메시지에 동기로 응답할 땐 반드시 `event.returnValue`를 설정해야 합니다.
 * 메시지를 비동기로 응답할 땐 `event.sender.send(...)` 메서드를 사용할 수 있습니다.
 
-다음 예제는 렌더러 프로세스와 메인 프로세스간에 메시지를 전달하고 받는 예제입니다:
+다음 예시는 렌더러 프로세스와 메인 프로세스간에 메시지를 전달하고 받는 예시입니다:
 
 ```javascript
 // 메인 프로세스
-const ipcMain = require('electron').ipcMain;
-ipcMain.on('asynchronous-message', function(event, arg) {
+const {ipcMain} = require('electron');
+ipcMain.on('asynchronous-message', (event, arg) => {
   console.log(arg);  // "ping" 출력
   event.sender.send('asynchronous-reply', 'pong');
 });
 
-ipcMain.on('synchronous-message', function(event, arg) {
+ipcMain.on('synchronous-message', (event, arg) => {
   console.log(arg);  // "ping" 출력
   event.returnValue = 'pong';
 });
@@ -32,10 +34,10 @@ ipcMain.on('synchronous-message', function(event, arg) {
 
 ```javascript
 // 렌더러 프로세스 (웹 페이지)
-const ipcRenderer = require('electron').ipcRenderer;
+const {ipcRenderer} = require('electron');
 console.log(ipc.sendSync('synchronous-message', 'ping')); // "pong" 출력
 
-ipcRenderer.on('asynchronous-reply', function(arg) {
+ipcRenderer.on('asynchronous-reply', (arg) => {
   console.log(arg); // "pong" 출력
 });
 ipcRenderer.send('asynchronous-message', 'ping');

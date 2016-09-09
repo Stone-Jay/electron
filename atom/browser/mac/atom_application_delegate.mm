@@ -6,18 +6,15 @@
 
 #import "atom/browser/mac/atom_application.h"
 #include "atom/browser/browser.h"
+#include "atom/browser/mac/dict_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/values.h"
 
 @implementation AtomApplicationDelegate
 
-- (id)init {
-  self = [super init];
-  menu_controller_.reset([[AtomMenuController alloc] init]);
-  return self;
-}
-
-- (void)setApplicationDockMenu:(ui::MenuModel*)model {
-  [menu_controller_ populateWithModel:model];
+- (void)setApplicationDockMenu:(atom::AtomMenuModel*)model {
+  menu_controller_.reset([[AtomMenuController alloc] initWithModel:model
+                                             useDefaultAccelerator:NO]);
 }
 
 - (void)applicationWillFinishLaunching:(NSNotification*)notify {
@@ -32,7 +29,10 @@
 }
 
 - (NSMenu*)applicationDockMenu:(NSApplication*)sender {
-  return [menu_controller_ menu];
+  if (menu_controller_)
+    return [menu_controller_ menu];
+  else
+    return nil;
 }
 
 - (BOOL)application:(NSApplication*)sender
@@ -57,6 +57,19 @@
   atom::Browser* browser = atom::Browser::Get();
   browser->Activate(static_cast<bool>(flag));
   return flag;
+}
+
+-  (BOOL)application:(NSApplication*)sender
+continueUserActivity:(NSUserActivity*)userActivity
+  restorationHandler:(void (^)(NSArray*restorableObjects))restorationHandler {
+  std::string activity_type(base::SysNSStringToUTF8(userActivity.activityType));
+  std::unique_ptr<base::DictionaryValue> user_info =
+      atom::NSDictionaryToDictionaryValue(userActivity.userInfo);
+  if (!user_info)
+    return NO;
+
+  atom::Browser* browser = atom::Browser::Get();
+  return browser->ContinueUserActivity(activity_type, *user_info) ? YES : NO;
 }
 
 @end

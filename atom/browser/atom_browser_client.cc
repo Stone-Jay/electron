@@ -9,6 +9,7 @@
 #endif
 
 #include "atom/browser/api/atom_api_app.h"
+#include "atom/browser/api/atom_api_protocol.h"
 #include "atom/browser/atom_access_token_store.h"
 #include "atom/browser/atom_browser_context.h"
 #include "atom/browser/atom_browser_main_parts.h"
@@ -23,8 +24,8 @@
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/stl_util.h"
-#include "base/strings/string_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_util.h"
 #include "chrome/browser/printing/printing_message_filter.h"
 #include "chrome/browser/renderer_host/pepper/chrome_browser_pepper_host_factory.h"
 #include "chrome/browser/renderer_host/pepper/widevine_cdm_message_filter.h"
@@ -49,21 +50,17 @@ namespace {
 // Next navigation should not restart renderer process.
 bool g_suppress_renderer_process_restart = false;
 
-// Custom schemes to be registered to standard.
-std::string g_custom_schemes = "";
 // Custom schemes to be registered to handle service worker.
 std::string g_custom_service_worker_schemes = "";
+
+void Noop(scoped_refptr<content::SiteInstance>) {
+}
 
 }  // namespace
 
 // static
 void AtomBrowserClient::SuppressRendererProcessRestartForOnce() {
   g_suppress_renderer_process_restart = true;
-}
-
-void AtomBrowserClient::SetCustomSchemes(
-    const std::vector<std::string>& schemes) {
-  g_custom_schemes = base::JoinString(schemes, ",");
 }
 
 void AtomBrowserClient::SetCustomServiceWorkerSchemes(
@@ -75,6 +72,17 @@ AtomBrowserClient::AtomBrowserClient() : delegate_(nullptr) {
 }
 
 AtomBrowserClient::~AtomBrowserClient() {
+}
+
+content::WebContents* AtomBrowserClient::GetWebContentsFromProcessID(
+    int process_id) {
+  // If the process is a pending process, we should use the old one.
+  if (ContainsKey(pending_processes_, process_id))
+    process_id = pending_processes_[process_id];
+
+  // Certain render process will be created with no associated render view,
+  // for example: ServiceWorker.
+  return WebContentsPreferences::GetWebContentsFromProcessID(process_id);
 }
 
 void AtomBrowserClient::RenderProcessWillLaunch(
@@ -136,7 +144,16 @@ void AtomBrowserClient::OverrideSiteInstanceForNavigation(
   if (url.SchemeIs(url::kJavaScriptScheme))
     return;
 
-  *new_instance = content::SiteInstance::CreateForURL(browser_context, url);
+  scoped_refptr<content::SiteInstance> site_instance =
+      content::SiteInstance::CreateForURL(browser_context, url);
+  *new_instance = site_instance.get();
+
+  // Make sure the |site_instance| is not freed when this function returns.
+  // FIXME(zcbenz): We should adjust OverrideSiteInstanceForNavigation's
+  // interface to solve this.
+  content::BrowserThread::PostTask(
+      content::BrowserThread::UI, FROM_HERE,
+      base::Bind(&Noop, base::RetainedRef(site_instance)));
 
   // Remember the original renderer process of the pending renderer process.
   auto current_process = current_instance->GetProcess();
@@ -153,10 +170,13 @@ void AtomBrowserClient::AppendExtraCommandLineSwitches(
   if (process_type != "renderer")
     return;
 
-  // The registered standard schemes.
-  if (!g_custom_schemes.empty())
-    command_line->AppendSwitchASCII(switches::kRegisterStandardSchemes,
-                                    g_custom_schemes);
+  // Copy following switches to child process.
+  static const char* const kCommonSwitchNames[] = {
+    switches::kStandardSchemes,
+  };
+  command_line->CopySwitchesFrom(
+      *base::CommandLine::ForCurrentProcess(),
+      kCommonSwitchNames, arraysize(kCommonSwitchNames));
 
   // The registered service worker schemes.
   if (!g_custom_service_worker_schemes.empty())
@@ -172,14 +192,7 @@ void AtomBrowserClient::AppendExtraCommandLineSwitches(
   }
 #endif
 
-  // If the process is a pending process, we should use the old one.
-  if (ContainsKey(pending_processes_, process_id))
-    process_id = pending_processes_[process_id];
-
-  // Certain render process will be created with no associated render view,
-  // for example: ServiceWorker.
-  content::WebContents* web_contents =
-      WebContentsPreferences::GetWebContentsFromProcessID(process_id);
+  content::WebContents* web_contents = GetWebContentsFromProcessID(process_id);
   if (!web_contents)
     return;
 
@@ -190,7 +203,7 @@ void AtomBrowserClient::AppendExtraCommandLineSwitches(
 void AtomBrowserClient::DidCreatePpapiPlugin(
     content::BrowserPpapiHost* host) {
   host->GetPpapiHost()->AddHostFactoryFilter(
-      make_scoped_ptr(new chrome::ChromeBrowserPepperHostFactory(host)));
+      base::WrapUnique(new chrome::ChromeBrowserPepperHostFactory(host)));
 }
 
 content::QuotaPermissionContext*
@@ -220,7 +233,7 @@ void AtomBrowserClient::AllowCertificateError(
 void AtomBrowserClient::SelectClientCertificate(
     content::WebContents* web_contents,
     net::SSLCertRequestInfo* cert_request_info,
-    scoped_ptr<content::ClientCertificateDelegate> delegate) {
+    std::unique_ptr<content::ClientCertificateDelegate> delegate) {
   if (!cert_request_info->client_certs.empty() && delegate_) {
     delegate_->SelectClientCertificate(
         web_contents, cert_request_info, std::move(delegate));
@@ -267,6 +280,15 @@ bool AtomBrowserClient::CanCreateWindow(
   return false;
 }
 
+void AtomBrowserClient::GetAdditionalAllowedSchemesForFileSystem(
+    std::vector<std::string>* additional_schemes) {
+  auto schemes_list = api::GetStandardSchemes();
+  if (!schemes_list.empty())
+    additional_schemes->insert(additional_schemes->end(),
+                               schemes_list.begin(),
+                               schemes_list.end());
+}
+
 brightray::BrowserMainParts* AtomBrowserClient::OverrideCreateBrowserMainParts(
     const content::MainFunctionParams&) {
   v8::V8::Initialize();  // Init V8 before creating main parts.
@@ -275,20 +297,21 @@ brightray::BrowserMainParts* AtomBrowserClient::OverrideCreateBrowserMainParts(
 
 void AtomBrowserClient::WebNotificationAllowed(
     int render_process_id,
-    const base::Callback<void(bool)>& callback) {
+    const base::Callback<void(bool, bool)>& callback) {
   content::WebContents* web_contents =
       WebContentsPreferences::GetWebContentsFromProcessID(render_process_id);
   if (!web_contents) {
-    callback.Run(false);
+    callback.Run(false, false);
     return;
   }
   auto permission_helper =
       WebContentsPermissionHelper::FromWebContents(web_contents);
   if (!permission_helper) {
-    callback.Run(false);
+    callback.Run(false, false);
     return;
   }
-  permission_helper->RequestWebNotificationPermission(callback);
+  permission_helper->RequestWebNotificationPermission(
+      base::Bind(callback, web_contents->IsAudioMuted()));
 }
 
 void AtomBrowserClient::RenderProcessHostDestroyed(

@@ -11,31 +11,29 @@ not have the keyboard focus. You should not use this module until the `ready`
 event of the app module is emitted.
 
 ```javascript
-const electron = require('electron');
-const app = electron.app;
-const globalShortcut = electron.globalShortcut;
+const {app, globalShortcut} = require('electron')
 
-app.on('ready', function() {
+app.on('ready', () => {
   // Register a 'CommandOrControl+X' shortcut listener.
-  var ret = globalShortcut.register('CommandOrControl+X', function() {
-    console.log('CommandOrControl+X is pressed');
-  });
+  const ret = globalShortcut.register('CommandOrControl+X', () => {
+    console.log('CommandOrControl+X is pressed')
+  })
 
   if (!ret) {
-    console.log('registration failed');
+    console.log('registration failed')
   }
 
   // Check whether a shortcut is registered.
-  console.log(globalShortcut.isRegistered('CommandOrControl+X'));
-});
+  console.log(globalShortcut.isRegistered('CommandOrControl+X'))
+})
 
-app.on('will-quit', function() {
+app.on('will-quit', () => {
   // Unregister a shortcut.
-  globalShortcut.unregister('CommandOrControl+X');
+  globalShortcut.unregister('CommandOrControl+X')
 
   // Unregister all shortcuts.
-  globalShortcut.unregisterAll();
-});
+  globalShortcut.unregisterAll()
+})
 ```
 
 ## Methods
